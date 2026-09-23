@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sewnie: clothes that fit the body you actually have</title>
+<meta name="description" content="Sewnie turns clothes you already own into things that fit, and drafts sewing patterns from your own measurements.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Archivo:wght@400;500;600&family=Space+Mono:wght@400;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ivory: #343141;
+    --paper: #282937;
+    --ink: #2a2438;
+    --cream: #f6eef8;
+    --stone: #9c90ad;
+    --thread: #dd93d1;
+    --thread-dim: #ab9ec4;
+    --line: rgba(42,36,56,0.14);
+    --glass-bg: rgba(255,250,254,0.45);
+    --glass-border: rgba(255,255,255,0.7);
+    --glass-shadow: 0 12px 40px rgba(15,12,22,0.35), 0 2px 10px rgba(15,12,22,0.22);
+    --glass-sheen: inset 0 1px 0 rgba(255,255,255,0.85), inset 0 0 0 1px rgba(255,255,255,0.14);
+  }
+  *{ box-sizing:border-box; }
+  html, body{ margin:0; background:var(--paper); color:var(--ink); font-family:'Archivo', sans-serif; }
+  h1,h2,h3{ font-family:'Fraunces', serif; font-weight:500; line-height:1.08; margin:0; letter-spacing:-0.01em; }
+  h2, .panel .eyebrow{
+    text-decoration-line: underline;
+    text-decoration-style: dashed;
+    text-decoration-color: var(--thread-dim);
+    text-underline-offset: 0.22em;
+  }
+  h2{ text-decoration-thickness: 2px; }
+  .panel .eyebrow{ text-decoration-thickness: 1.5px; text-decoration-color: var(--thread); }
+  a{ color:inherit; }
+  ::selection{ background:var(--thread); color:var(--paper); }
+  :focus-visible{ outline:2px solid var(--thread); outline-offset:3px; }
+
+  /* ---------- fixed 3D canvas ---------- */
+  #scene-canvas{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+    z-index:0;
+    touch-action:none;
+  }
+
+  #load-status{
+    position:fixed;
+    inset:0;
+    z-index:5;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--paper);
+    font-family:'Space Mono', monospace;
+    font-size:0.85rem;
+    color:var(--stone);
+    transition:opacity 0.6s ease;
+  }
+  #load-status.hidden{ opacity:0; pointer-events:none; }
+
+  /* ---------- header ---------- */
+  header{
+    position:fixed;
+    top:0; left:0; right:0;
+    z-index:10;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:24px 32px;
+    pointer-events:none;
+  }
+  header > *{ pointer-events:auto; }
+  .logo{
+    font-family:'Caveat', cursive; font-size:1.7rem; font-weight:700;
+    text-decoration:none; letter-spacing:0.01em; color:var(--thread);
+    background:var(--glass-bg);
+    padding:8px 16px;
+    border-radius:14px;
+    border:1px solid var(--glass-border);
+    box-shadow:var(--glass-shadow), var(--glass-sheen);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+  .nav-cta{
+    font-family:'Archivo', sans-serif; font-size:0.85rem; font-weight:600;
+    text-decoration:none; color:var(--cream);
+    background:var(--ink);
+    padding:11px 20px;
+    border-radius:999px;
+    box-shadow:0 6px 18px rgba(15,12,22,0.35);
+    transition:background 0.2s ease, transform 0.2s ease;
+  }
+  .nav-cta:hover{ background:var(--thread); transform:translateY(-1px); }
+
+  /* ---------- scroll narrative ---------- */
+  main{ position:relative; z-index:2; }
+
+  .stop{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    padding:0 6vw;
+    pointer-events:none;
+  }
+  .stop.align-right{ justify-content:flex-end; }
+  .stop.align-left{ justify-content:flex-start; }
+  .stop.align-center{ justify-content:center; text-align:center; }
+
+  .panel{
+    pointer-events:auto;
+    max-width:420px;
+    background:var(--glass-bg);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border:1px solid var(--glass-border);
+    border-radius:24px;
+    padding:34px 36px;
+    box-shadow:var(--glass-shadow), var(--glass-sheen);
+  }
+  .stop.align-center .panel{ max-width:520px; }
+
+  .panel .eyebrow{
+    font-family:'Space Mono', monospace;
+    font-size:0.7rem;
+    color:var(--thread);
+    margin-bottom:10px;
+    letter-spacing:0.04em;
+  }
+  .panel h2{ font-size:clamp(1.6rem, 3vw, 2.1rem); margin-bottom:14px; }
+  .panel p{ font-size:1rem; color:#3a3348; margin:0 0 12px; line-height:1.5; }
+  .panel p:last-child{ margin-bottom:0; }
+  .panel ul{ margin:0; padding-left:1.1em; color:#3a3348; font-size:0.98rem; }
+  .panel li{ margin-bottom:6px; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:10px;
+    background:var(--ink); color:var(--cream);
+    font-family:'Archivo', sans-serif; font-weight:600; font-size:0.95rem;
+    padding:14px 26px; border-radius:999px; border:none; cursor:pointer; text-decoration:none;
+    margin-top:8px;
+    transition:background 0.2s ease;
+  }
+  .btn:hover{ background:var(--thread); }
+
+  /* ---------- hint pill ---------- */
+  .drag-hint{
+    position:fixed;
+    bottom:28px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:8;
+    font-family:'Space Mono', monospace;
+    font-size:0.72rem;
+    color:var(--stone);
+    background:var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border:1px solid var(--glass-border);
+    padding:9px 18px;
+    border-radius:999px;
+    box-shadow:var(--glass-shadow), var(--glass-sheen);
+    pointer-events:none;
+    transition:opacity 0.5s ease;
+  }
+  .drag-hint.hidden{ opacity:0; }
+
+  /* ---------- progress dots ---------- */
+  .stop-dots{
+    position:fixed;
+    right:24px;
+    top:50%;
+    transform:translateY(-50%);
+    z-index:8;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    padding:14px 10px;
+    background:var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border:1px solid var(--glass-border);
+    border-radius:999px;
+    box-shadow:var(--glass-shadow), var(--glass-sheen);
+  }
+  .stop-dots button{
+    width:7px; height:7px;
+    border-radius:50%;
+    border:1.3px solid var(--stone);
+    background:transparent;
+    padding:0;
+    cursor:pointer;
+    transition:transform 0.2s ease;
+  }
+  .stop-dots button.active{ background:var(--thread); border-color:var(--thread); transform:scale(1.3); }
+
+  /* ---------- signup ---------- */
+  form.subscribe{
+    margin-top:20px;
+    display:flex;
+    gap:0;
+    border-bottom:1.5px solid var(--ink);
+    padding-bottom:6px;
+  }
+  form.subscribe input[type="email"]{
+    flex:1; border:none; background:transparent;
+    font-family:'Archivo', sans-serif; font-size:1rem; padding:8px 4px; color:var(--ink);
+  }
+  form.subscribe input[type="email"]::placeholder{ color:var(--stone); }
+  form.subscribe input[type="email"]:focus{ outline:none; }
+  form.subscribe button{
+    background:none; border:none; font-family:'Archivo', sans-serif;
+    font-weight:600; font-size:0.9rem; color:var(--ink); cursor:pointer;
+    padding:8px 6px; white-space:nowrap;
+  }
+  form.subscribe button:hover{ color:var(--thread); }
+  form.subscribe button:disabled{ color:var(--stone); cursor:default; }
+  .form-msg{ margin-top:10px; font-size:0.85rem; min-height:1.1em; }
+  .form-msg.ok{ color:#3d6b3a; }
+  .form-msg.err{ color:var(--thread); }
+
+  footer{
+    position:relative;
+    z-index:2;
+    background:var(--paper);
+    border-top:1px solid var(--line);
+    padding:28px 32px 40px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  footer .fine{ color:var(--stone); font-size:0.82rem; }
+
+  /* ---------- debug overlay (press D) ---------- */
+  #debug{
+    position:fixed;
+    left:16px;
+    bottom:16px;
+    z-index:20;
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    background:rgba(20,18,14,0.86);
+    color:#c9d6b8;
+    padding:10px 12px;
+    border-radius:4px;
+    white-space:pre;
+    display:none;
+    max-width:340px;
+  }
+  #debug.show{ display:block; }
+
+  @media (max-width:760px){
+    .panel{ max-width:88vw; padding:24px 24px; border-radius:20px; }
+    .stop{ padding:0 5vw; }
+    .stop-dots{ right:14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .drag-hint, #load-status{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene-canvas"></canvas>
+<div id="load-status">Loading the desk… <span id="load-pct">0%</span></div>
+<div id="debug"></div>
+
+<header>
+  <a class="logo" href="#top">Sewnie</a>
+  <a class="nav-cta" href="#signup">Get early access</a>
+</header>
+
+<nav class="stop-dots" id="stop-dots" aria-label="Scene sections"></nav>
+<div class="drag-hint" id="drag-hint">drag to look around · scroll to move through the desk</div>
+
+<main id="top">
+
+  <section class="stop align-center" data-waypoint="0">
+    <div class="panel">
+      <p class="eyebrow">Now taking early access requests</p>
+      <h2>Fit isn't one size. It's yours.</h2>
+      <p>This is the desk Sewnie is built around: measuring tape, cutting mat, machine, and a stack of ideas pinned to the wall. Scroll to walk through what each corner of it means for the app.</p>
+    </div>
+  </section>
+
+  <section class="stop align-left" data-waypoint="1">
+    <div class="panel">
+      <p class="eyebrow">01. The dress form</p>
+      <h2>Start with your own measurements</h2>
+      <p>No size chart, no guesswork. You (or a form built to your shape) get measured once, and every pattern and alteration Sewnie generates after that is drafted against the body that's actually wearing the clothes.</p>
+    </div>
+  </section>
+
+  <section class="stop align-right" data-waypoint="2">
+    <div class="panel">
+      <p class="eyebrow">02. The cutting table</p>
+      <h2>Or draft it from scratch</h2>
+      <p>Enter your measurements and Sewnie drafts a sewing pattern from the ground up: bodice, sleeve, waist, all sized to you. Export it and print it at true scale, ready to lay on fabric.</p>
+    </div>
+  </section>
+
+  <section class="stop align-left" data-waypoint="3">
+    <div class="panel">
+      <p class="eyebrow">03. The sewing machine</p>
+      <h2>Fix what you already own</h2>
+      <p>Photograph a piece that doesn't fit and tell Sewnie what's off. It reads the construction and builds an alteration plan: the exact seams to open, how much to take in, and the order to do it in.</p>
+    </div>
+  </section>
+
+  <section class="stop align-right" data-waypoint="4">
+    <div class="panel">
+      <p class="eyebrow">04. The moodboard</p>
+      <h2>Thrift finds, reimagined</h2>
+      <p>Point your camera at anything on the rack. Sewnie sketches out a few ways it could become something else, so you know what you're buying before you buy it.</p>
+    </div>
+  </section>
+
+  <section class="stop align-center" id="signup" data-waypoint="5">
+    <div class="panel">
+      <p class="eyebrow">Be one of the first hands on it</p>
+      <h2>Join the list</h2>
+      <p>Sewnie is still on the cutting table. Leave your email and we'll write the moment there's something to try.</p>
+      <form class="subscribe" id="subscribe-form" novalidate>
+        <label for="email-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Email address</label>
+        <input id="email-input" type="email" name="email" placeholder="you@email.com" autocomplete="email" required>
+        <button type="submit" id="subscribe-btn">Join</button>
+      </form>
+      <p class="form-msg" id="form-msg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <span class="logo">Sewnie</span>
+  <span class="fine">Made for anyone who's ever taken in a waistband. © 2026 Sewnie.</span>
+</footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ============================================================
+   CAMERA WAYPOINTS, visually tuned against the live render.
+   Press "D" on the live page to open a readout of the current
+   camera position and orbit target: drag to a framing you like,
+   copy those numbers in here, per waypoint.
+   ============================================================ */
+const waypoints = [
+  { pos: [0.1, 1.85, 2.3],    target: [-0.05, 0.9, 0.0] },     // 0 wide establishing, the whole desk
+  { pos: [-0.9, 1.35, 1.05],  target: [-0.9, 1.1, 0.0] },      // 1 dress form only, room for the tape to drift apart
+  { pos: [0.15, 1.25, 1.15],  target: [-0.05, 0.72, -0.15] },  // 2 cutting table only, room for props to scatter
+  { pos: [0.85, 1.05, 0.55],  target: [0.85, 0.92, -0.05] },   // 3 sewing machine only, nothing else in frame
+  { pos: [0.1, 1.6, 1.3],     target: [0.1, 1.4, -0.2] },      // 4 moodboard only, room for swatches to peel off
+  { pos: [0.1, 1.95, 2.65],   target: [-0.05, 0.92, 0.0] }     // 5 signup, the whole desk again
+];
+
+/* On narrow screens the text panel runs close to full width, so there's
+   almost no horizontal gap beside it. Above and below the panel's vertical
+   band is still clear full-width, so these overrides raise/lower the framing
+   to put each stop's hero prop there instead of directly behind the text. */
+if (window.matchMedia('(max-width: 760px)').matches) {
+  waypoints[1] = { pos: [-0.35, 1.65, 1.6], target: [-0.7, 1.35, 0.0] };  // 1 dress form, pokes up above panel
+  waypoints[2] = { pos: [0.3, 2.0, 1.1],    target: [-0.1, 1.2, -0.05] };// 2 cutting table, mat shows below panel
+  waypoints[3] = { pos: [1.1, 1.85, 1.05],  target: [0.65, 1.2, -0.02] };// 3 sewing machine, shows below panel
+}
+
+const canvas = document.getElementById('scene-canvas');
+const loadStatus = document.getElementById('load-status');
+const loadPct = document.getElementById('load-pct');
+const dragHint = document.getElementById('drag-hint');
+const debugEl = document.getElementById('debug');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x282937);
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.05, 50);
+camera.position.set(...waypoints[0].pos);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(...waypoints[0].target);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 0.4;
+controls.maxDistance = 6;
+controls.update();
+
+/* soft PBR environment lighting, no external HDRI file needed */
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const hemi = new THREE.HemisphereLight(0xfff4e0, 0x2a2620, 0.7);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xfff1dd, 1.4);
+key.position.set(2.5, 4, 2);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xcfe0ff, 0.5);
+fill.position.set(-2.5, 1.5, -1.5);
+scene.add(fill);
+
+/* ---- load model ---- */
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+let modelRoot = null;
+
+/* ============================================================
+   ISOLATION — every part of the desk belongs to exactly one of
+   these four "scenes". While the camera is focused on a given
+   waypoint (1-4), every part NOT in that scene fades out to fully
+   invisible; parts in that scene stay fully visible. At the wide
+   shots (waypoints 0 and 5) everything is visible.
+   ============================================================ */
+const SCENE_GROUPS = {
+  1: ['mint1650002', 'mint1650003'], // dress form: body+stand, measuring tape
+  2: ['mint1650001', 'mint1650004', 'mint1650012', 'mint1650019', 'mint1650033', 'mint1650034'], // cutting table: mat, table+legs, pencil cup, pattern paper, folded fabric, pins/ribbon
+  3: ['mint1650005'], // sewing machine
+  4: ['mint1650006','mint1650007','mint1650008','mint1650009','mint1650010','mint1650011','mint1650013','mint1650014','mint1650015','mint1650016','mint1650017','mint1650018','mint1650020','mint1650021','mint1650022','mint1650023','mint1650024','mint1650025','mint1650026','mint1650027','mint1650028','mint1650029','mint1650030','mint1650031','mint1650032'] // moodboard: pegboard, swatches, ruler, scissors, thread rack
+};
+const GROUP_OF_NAME = {};
+Object.entries(SCENE_GROUPS).forEach(([wp, names]) => {
+  names.forEach((n) => { GROUP_OF_NAME[n] = Number(wp); });
+});
+const isolationMeshes = []; // { mesh, waypoint }
+
+gltfLoader.load(
+  'assets/tailorly-desk.glb',
+  (gltf) => {
+    modelRoot = gltf.scene;
+    modelRoot.traverse((obj) => {
+      if (obj.isMesh) {
+        /* materials are shared across unrelated parts in this asset (the
+           same material index gets reused by meshes in different physical
+           objects), so clone before touching opacity or a fade on one part
+           would silently fade others sharing that material too. */
+        obj.material = obj.material.clone();
+        obj.material.envMapIntensity = 1.0;
+        /* the source asset bakes a saturated vertex-color tint (mint/lavender/olive)
+           on top of its real fabric/wood/metal textures, so drop it and let the
+           actual material colors show instead of the tint. */
+        obj.material.vertexColors = false;
+        obj.material.transparent = true;
+        obj.material.needsUpdate = true;
+      }
+    });
+    /* ============================================================
+       COLOR PALETTE — retint parts to match the reference photo: warm
+       cream/beige linen, pale natural wood, sage green, black hardware,
+       mustard-gold accents. A few parts (the tape, the tabletop, the
+       pencil caps) have very dark baked-in textures that a simple tint
+       can't brighten past their own value, so those also drop their
+       texture map and use a flat color instead.
+       ============================================================ */
+    const rootNode = modelRoot.children[0];
+    function paint(nodeName, childIndex, hex, dropMap) {
+      const node = rootNode.getObjectByName(nodeName);
+      if (!node) return;
+      const target = childIndex == null ? node : node.children[childIndex];
+      if (!target || !target.material) return;
+      if (dropMap) target.material.map = null;
+      target.material.color.set(hex);
+      target.material.needsUpdate = true;
+    }
+    // dress form: pincushion knob, torso, stand pole, base disc
+    paint('mint1650002', 0, 0xcfcac2);
+    paint('mint1650002', 1, 0xd8c9ae);
+    paint('mint1650002', 2, 0xc7c3ba);
+    paint('mint1650002', 3, 0x1c1a17);
+    paint('mint1650003', null, 0xc99a2e, true); // measuring tape
+
+    // cutting table: sawhorse legs, hardware, tabletop
+    paint('mint1650004', 0, 0xe6d6b8);
+    paint('mint1650004', 1, 0x8a8a82);
+    paint('mint1650004', 2, 0xf1ece0, true);
+
+    paint('mint1650001', null, 0x8fa593); // cutting mat
+    paint('mint1650019', null, 0xf3efe6); // pattern paper
+    paint('mint1650033', null, 0x8fa89c); // folded fabric
+    paint('mint1650034', null, 0xc99a2e); // ribbon / pins
+
+    // pencil cup: cup body, pen shafts, pen caps + marker
+    paint('mint1650012', 0, 0x2b2b28);
+    paint('mint1650012', 1, 0xede7da);
+    paint('mint1650012', 2, 0xc99a2e, true);
+
+    // moodboard: pegboard backing, thread-rack frame, thread spools
+    paint('mint1650006', null, 0xe9ddc4);
+    paint('mint1650007', null, 0xa3372e);
+    paint('mint1650008', 0, 0x6b8299);
+    paint('mint1650008', 1, 0xede7da);
+
+    // set-square rulers
+    paint('mint1650010', null, 0xd8bd8f);
+    paint('mint1650011', null, 0xd8bd8f);
+
+    // scissors (blade, handle) x4
+    ['mint1650009', 'mint1650029', 'mint1650030', 'mint1650031'].forEach((n) => {
+      paint(n, 0, 0xc0c0bc);
+      paint(n, 1, 0x1c1a17);
+    });
+
+    /* a top-level part with more than one material imports as a Group whose
+       actual Mesh children are named "<part>_1", "<part>_2" etc, not the
+       part's own name — walk each top-level part's own subtree so every
+       mesh inside it (not just single-material parts) gets tracked. */
+    rootNode.children.forEach((part) => {
+      const wp = GROUP_OF_NAME[part.name];
+      if (!wp) return;
+      part.traverse((mesh) => {
+        if (mesh.isMesh) isolationMeshes.push({ mesh, waypoint: wp });
+      });
+    });
+    scene.add(modelRoot);
+    loadStatus.classList.add('hidden');
+  },
+  (xhr) => {
+    if (xhr.total) {
+      loadPct.textContent = Math.round((xhr.loaded / xhr.total) * 100) + '%';
+    }
+  },
+  (err) => {
+    console.error('Model failed to load', err);
+    loadStatus.textContent = 'Could not load the 3D scene. Check assets/tailorly-desk.glb is next to this file.';
+  }
+);
+
+/* ---- scroll -> waypoint blending ---- */
+const stops = Array.from(document.querySelectorAll('.stop'));
+const dotsNav = document.getElementById('stop-dots');
+stops.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.setAttribute('aria-label', 'Jump to section ' + (i + 1));
+  b.addEventListener('click', () => s.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  dotsNav.appendChild(b);
+});
+const dotEls = Array.from(dotsNav.children);
+
+let scrollT = 0; // continuous 0..(waypoints.length-1)
+let userIsDragging = false;
+
+function computeScrollT() {
+  const scrollY = window.scrollY;
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  const frac = total > 0 ? Math.min(1, Math.max(0, scrollY / total)) : 0;
+  return frac * (waypoints.length - 1);
+}
+
+window.addEventListener('scroll', () => {
+  scrollT = computeScrollT();
+  const nearest = Math.round(scrollT);
+  dotEls.forEach((d, i) => d.classList.toggle('active', i === nearest));
+  if (dragHint) dragHint.classList.toggle('hidden', window.scrollY > 40);
+}, { passive: true });
+
+controls.addEventListener('start', () => { userIsDragging = true; });
+controls.addEventListener('end', () => {
+  setTimeout(() => { userIsDragging = false; }, 2500);
+});
+
+const _pos = new THREE.Vector3();
+const _target = new THREE.Vector3();
+
+function applyWaypointBlend(t) {
+  const i0 = Math.max(0, Math.min(waypoints.length - 1, Math.floor(t)));
+  const i1 = Math.min(waypoints.length - 1, i0 + 1);
+  const localT = t - i0;
+  const a = waypoints[i0], b = waypoints[i1];
+
+  _pos.set(
+    a.pos[0] + (b.pos[0] - a.pos[0]) * localT,
+    a.pos[1] + (b.pos[1] - a.pos[1]) * localT,
+    a.pos[2] + (b.pos[2] - a.pos[2]) * localT
+  );
+  _target.set(
+    a.target[0] + (b.target[0] - a.target[0]) * localT,
+    a.target[1] + (b.target[1] - a.target[1]) * localT,
+    a.target[2] + (b.target[2] - a.target[2]) * localT
+  );
+
+  camera.position.lerp(_pos, 0.06);
+  controls.target.lerp(_target, 0.06);
+}
+
+/* ---- debug readout, toggle with "D" ---- */
+let debugOn = false;
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'd' || e.key === 'D') {
+    debugOn = !debugOn;
+    debugEl.classList.toggle('show', debugOn);
+  }
+});
+
+function updateDebug() {
+  if (!debugOn) return;
+  const p = camera.position, t = controls.target;
+  debugEl.textContent =
+    'CAMERA DEBUG (press D to hide)\n' +
+    'pos:    [' + p.x.toFixed(2) + ', ' + p.y.toFixed(2) + ', ' + p.z.toFixed(2) + ']\n' +
+    'target: [' + t.x.toFixed(2) + ', ' + t.y.toFixed(2) + ', ' + t.z.toFixed(2) + ']\n' +
+    'scrollT: ' + scrollT.toFixed(2) +
+    '\n\nDrag to frame a shot, read the numbers above,\npaste into the matching waypoint in the code.';
+}
+
+/* ---- render loop ---- */
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+
+const FOCUS_WAYPOINTS = [1, 2, 3, 4];
+function updateIsolation() {
+  isolationMeshes.forEach(({ mesh, waypoint }) => {
+    let hide = 0;
+    FOCUS_WAYPOINTS.forEach((w) => {
+      if (w === waypoint) return;
+      hide = Math.max(hide, Math.max(0, 1 - Math.abs(scrollT - w)));
+    });
+    const opacity = 1 - hide;
+    mesh.material.opacity = opacity;
+    mesh.visible = opacity > 0.01;
+  });
+}
+
+function tick() {
+  if (!userIsDragging) {
+    applyWaypointBlend(scrollT);
+  }
+  updateIsolation();
+  controls.update();
+  updateDebug();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+
+/* ============================================================
+   signup form, same Resend-via-Worker relay as the rest of the site
+   ============================================================ */
+const SIGNUP_ENDPOINT = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+const form = document.getElementById('subscribe-form');
+const btn = document.getElementById('subscribe-btn');
+const msg = document.getElementById('form-msg');
+
+form.addEventListener('submit', function(e){
+  e.preventDefault();
+  var email = document.getElementById('email-input').value.trim();
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    showMsg('Enter a valid email.', 'err');
+    return;
+  }
+  if(SIGNUP_ENDPOINT.indexOf('YOUR-WORKER-SUBDOMAIN') !== -1){
+    showMsg("Signup isn't connected yet. Finish the Worker setup step.", 'err');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Joining…';
+  fetch(SIGNUP_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email })
+  }).then(function(res){
+    return res.json().catch(function(){ return {}; }).then(function(data){
+      return { ok: res.ok, data: data };
+    });
+  }).then(function(result){
+    btn.disabled = false;
+    btn.textContent = 'Join';
+    if(result.ok){
+      form.reset();
+      showMsg("You're on the list, thank you.", 'ok');
+    } else {
+      showMsg((result.data && result.data.error) || 'Something went sideways. Try again.', 'err');
+    }
+  }).catch(function(){
+    btn.disabled = false;
+    btn.textContent = 'Join';
+    showMsg('Something went sideways. Try again.', 'err');
+  });
+});
+
+function showMsg(text, kind){
+  msg.textContent = text;
+  msg.className = 'form-msg ' + kind;
+}
+</script>
+
+</body>
+</html>
