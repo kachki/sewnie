@@ -8,7 +8,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Archivo:wght@400;500;600&family=Space+Mono:wght@400;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Archivo:wght@400;500;600&family=Space+Mono:wght@400;700&family=Pixelify+Sans:wght@500;600;700&display=swap" rel="stylesheet">
 
 <style>
   :root{
@@ -28,14 +28,13 @@
   *{ box-sizing:border-box; }
   html, body{ margin:0; background:var(--paper); color:var(--ink); font-family:'Archivo', sans-serif; }
   h1,h2,h3{ font-family:'Fraunces', serif; font-weight:500; line-height:1.08; margin:0; letter-spacing:-0.01em; }
-  h2, .panel .eyebrow{
+  .panel .eyebrow{
     text-decoration-line: underline;
-    text-decoration-style: dashed;
-    text-decoration-color: var(--thread-dim);
-    text-underline-offset: 0.22em;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--thread);
+    text-decoration-thickness: 3px;
+    text-underline-offset: 0.25em;
   }
-  h2{ text-decoration-thickness: 2px; }
-  .panel .eyebrow{ text-decoration-thickness: 1.5px; text-decoration-color: var(--thread); }
   a{ color:inherit; }
   ::selection{ background:var(--thread); color:var(--paper); }
   :focus-visible{ outline:2px solid var(--thread); outline-offset:3px; }
@@ -79,8 +78,8 @@
   }
   header > *{ pointer-events:auto; }
   .logo{
-    font-family:'Caveat', cursive; font-size:1.7rem; font-weight:700;
-    text-decoration:none; letter-spacing:0.01em; color:var(--thread);
+    font-family:'Pixelify Sans', monospace; font-size:1.3rem; font-weight:700;
+    text-decoration:none; letter-spacing:0.02em; color:var(--thread);
     background:var(--glass-bg);
     padding:8px 16px;
     border-radius:14px;
@@ -128,13 +127,20 @@
   .stop.align-center .panel{ max-width:520px; }
 
   .panel .eyebrow{
-    font-family:'Space Mono', monospace;
-    font-size:0.7rem;
-    color:var(--thread);
+    font-family:'Pixelify Sans', monospace;
+    font-weight:600;
+    font-size:0.95rem;
+    color:#a8399a;
     margin-bottom:10px;
-    letter-spacing:0.04em;
+    letter-spacing:0.03em;
   }
-  .panel h2{ font-size:clamp(1.6rem, 3vw, 2.1rem); margin-bottom:14px; }
+  .panel h2{
+    font-family:'Pixelify Sans', monospace;
+    font-weight:600;
+    letter-spacing:0.01em;
+    font-size:clamp(1.5rem, 3vw, 1.9rem);
+    margin-bottom:14px;
+  }
   .panel p{ font-size:1rem; color:#3a3348; margin:0 0 12px; line-height:1.5; }
   .panel p:last-child{ margin-bottom:0; }
   .panel ul{ margin:0; padding-left:1.1em; color:#3a3348; font-size:0.98rem; }
@@ -213,7 +219,7 @@
     flex:1; border:none; background:transparent;
     font-family:'Archivo', sans-serif; font-size:1rem; padding:8px 4px; color:var(--ink);
   }
-  form.subscribe input[type="email"]::placeholder{ color:var(--stone); }
+  form.subscribe input[type="email"]::placeholder{ color:#7a6f89; }
   form.subscribe input[type="email"]:focus{ outline:none; }
   form.subscribe button{
     background:none; border:none; font-family:'Archivo', sans-serif;
@@ -262,6 +268,13 @@
     .panel{ max-width:88vw; padding:24px 24px; border-radius:20px; }
     .stop{ padding:0 5vw; }
     .stop-dots{ right:14px; }
+    /* touch-action:none (set for desktop's click-drag-to-orbit) blocks the
+       browser's native swipe-to-scroll on a canvas that covers the whole
+       screen, effectively trapping mobile visitors on one section. Give
+       vertical swipes back to the page; orbiting by touch is a fair trade
+       for actually being able to scroll. */
+    #scene-canvas{ touch-action: pan-y; }
+    .drag-hint .drag-part{ display:none; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -281,7 +294,7 @@
 </header>
 
 <nav class="stop-dots" id="stop-dots" aria-label="Scene sections"></nav>
-<div class="drag-hint" id="drag-hint">drag to look around · scroll to move through the desk</div>
+<div class="drag-hint" id="drag-hint"><span class="drag-part">drag to look around · </span>scroll to move through the desk</div>
 
 <main id="top">
 
@@ -483,13 +496,17 @@ gltfLoader.load(
        texture map and use a flat color instead.
        ============================================================ */
     const rootNode = modelRoot.children[0];
-    function paint(nodeName, childIndex, hex, dropMap) {
+    function paint(nodeName, childIndex, hex, dropMap, pbr) {
       const node = rootNode.getObjectByName(nodeName);
       if (!node) return;
       const target = childIndex == null ? node : node.children[childIndex];
       if (!target || !target.material) return;
       if (dropMap) target.material.map = null;
       target.material.color.set(hex);
+      if (pbr) {
+        if (pbr.roughness != null) target.material.roughness = pbr.roughness;
+        if (pbr.metalness != null) target.material.metalness = pbr.metalness;
+      }
       target.material.needsUpdate = true;
     }
     // dress form: pincushion knob, torso, stand pole, base disc
@@ -506,8 +523,24 @@ gltfLoader.load(
 
     paint('mint1650001', null, 0x8fa593); // cutting mat
     paint('mint1650019', null, 0xf3efe6); // pattern paper
-    paint('mint1650033', null, 0x8fa89c); // folded fabric
+    paint('mint1650033', null, 0xbb6f97, null, { roughness: 0.9, metalness: 0 }); // folded fabric, matte dusty rose
     paint('mint1650034', null, 0xc99a2e); // ribbon / pins
+
+    // unlike the rest of the desk, this fabric has no color texture at all —
+    // its folds are defined purely by baked vertex-color shading, so give it
+    // back the vertex colors the global drop above just took away.
+    const fabric = rootNode.getObjectByName('mint1650033');
+    if (fabric) {
+      fabric.material.vertexColors = true;
+      fabric.material.needsUpdate = true;
+    }
+
+    // the ribbon/pins mesh clips through the fabric fold wherever it's
+    // draped there, so move it off the fabric entirely: flat on the cutting
+    // mat, in the open gap between the fabric (x -0.38) and the pattern
+    // paper (x 0.19).
+    const ribbon = rootNode.getObjectByName('mint1650034');
+    if (ribbon) ribbon.position.set(-0.08, 0.765, 0.03);
 
     // pencil cup: cup body, pen shafts, pen caps + marker
     paint('mint1650012', 0, 0x2b2b28);
